@@ -1,4 +1,0 @@
-picamera==1.13
-SpeechRecognition==3.10.0
-gTTS==2.3.2
-RPi.GPIO==0.7.1
