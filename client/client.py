@@ -1,265 +1,261 @@
 import cv2
-import requests
-import json
-import base64
-import websocket
+import socket
 import threading
-import time
 import pyaudio
 import wave
-import speech_recognition as sr
-import pyttsx3
-import argparse
+import struct
+import time
 import os
+import subprocess
+import json
+import numpy as np
+from PIL import Image
+import io
 
+# Configuration
+SERVER_IP = '192.168.83.133'  # Change to your server's IP address
+SERVER_PORT_VIDEO = 8000
+SERVER_PORT_AUDIO = 8001
+SERVER_PORT_COMMANDS = 8002
+SERVER_PORT_RESPONSE = 8003
 
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+FPS = 10
+AUDIO_CHUNK = 1024
+AUDIO_FORMAT = pyaudio.paInt16
+AUDIO_CHANNELS = 1
+AUDIO_RATE = 16000
+RECORDING_SECONDS = 5  # Duration to record when activated
 
-# Initialize argument parser
-parser = argparse.ArgumentParser(description='AI Academic Assistant Client')
-parser.add_argument('--server', type=str, default='http://localhost:8000',
-                    help='Server URL (default: http://localhost:8000)')
-parser.add_argument('--interval', type=int, default=5,
-                    help='Facial recognition interval in seconds (default: 5)')
-parser.add_argument('--debug', action='store_true',
-                    help='Enable debug mode with additional logging')
-args = parser.parse_args()
-
-# Server URL
-SERVER_URL = args.server
-WEBSOCKET_URL = SERVER_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws'
-DEBUG = args.debug
-
-# Initialize GPIO
-
-
-# Initialize text-to-speech engine
-engine = pyttsx3.init()
-
-def debug_print(message):
-    if DEBUG:
-        print(f"[DEBUG] {message}")
-
-
-
-def speak(text):
-    debug_print(f"Speaking: {text}")
-    engine.say(text)
-    engine.runAndWait()
-
-class AcademicAssistantClient:
+class AttendanceClient:
     def __init__(self):
-        self.ws = None
         self.camera = None
-        self.recognizer = sr.Recognizer()
-        self.ws_thread = None
-        self.running = False
-        self.last_recognition_time = 0
-        self.recognition_interval = args.interval  # seconds
-
-    def connect_websocket(self):
-        debug_print(f"Connecting to WebSocket at {WEBSOCKET_URL}")
-        self.ws = websocket.WebSocketApp(
-            WEBSOCKET_URL,
-            on_message=self.on_message,
-            on_error=self.on_error,
-            on_close=self.on_close,
-            on_open=self.on_open
-        )
-        self.ws_thread = threading.Thread(target=self.ws.run_forever)
-        self.ws_thread.daemon = True
-        self.ws_thread.start()
-
-    def on_message(self, ws, message):
-        try:
-            data = json.loads(message)
-            debug_print(f"Received message: {data}")
-            
-            if "type" in data and data["type"] == "recognition_result":
-                if data["status"] == "success":
-                    debug_print("Status: Processing")
-                    students = data["recognized_students"]
-                    if students:
-                        speak(f"Hello, {', '.join([s['name'] for s in students])}. Attendance recorded.")
-                else:
-                    debug_print("Status: error")
-                    speak("No registered students recognized.")
-            
-            elif "response" in data:
-                debug_prin("Status: ready")
-                speak(data["response"])
-                
-        except Exception as e:
-            debug_print(f"Error processing message: {e}")
-            debug_print("Status: error")
-
-    def on_error(self, ws, error):
-        debug_print(f"WebSocket error: {error}")
-        debug_print("Status: error")
-        speak("Connection error. Please check the server.")
-        time.sleep(5)
-        self.connect_websocket()
-
-    def on_close(self, ws, close_status_code, close_msg):
-        debug_print("WebSocket connection closed")
-        debug_print("Status: error")
-        if self.running:
-            speak("Connection lost. Attempting to reconnect.")
-            time.sleep(5)
-            self.connect_websocket()
-
-    def on_open(self, ws):
-        debug_print("WebSocket connection established")
-        debug_print("Status: ready")
-        speak("System ready. Hello, I am your academic assistant.")
-
-    def init_camera(self):
-        debug_print("Initializing camera")
-        self.camera = cv2.VideoCapture(0)
-        if not self.camera.isOpened():
-            debug_print("Error: Could not open camera")
-            
-            speak("Camera error. Please check the connection.")
-            return False
-        return True
-
-    def capture_image(self):
-        ret, frame = self.camera.read()
-        if not ret:
-            debug_print("Error: Could not capture image")
-            return None
-        return frame
-
-    def encode_image(self, image):
-        ret, buffer = cv2.imencode('.jpg', image)
-        if not ret:
-            debug_print("Error: Could not encode image")
-            return None
-        return base64.b64encode(buffer).decode('utf-8')
-
-    def recognize_face(self):
-        current_time = time.time()
-        if current_time - self.last_recognition_time < self.recognition_interval:
-            return
+        self.audio = pyaudio.PyAudio()
+        self.is_recording = False
+        self.should_exit = False
+        self.response_thread = None
+        self.speaking = False
         
-        debug_print("Status: Processing")
-        debug_print("Capturing image for face recognition")
-        frame = self.capture_image()
-        if frame is None:
-            set_led_status("error")
-            return
-        
-        encoded_image = self.encode_image(frame)
-        if encoded_image is None:
-            debug_print("Status: error")
-            return
-        
-        try:
-            message = {
-                "type": "face_recognition",
-                "image": encoded_image
-            }
-            self.ws.send(json.dumps(message))
-            self.last_recognition_time = current_time
-        except Exception as e:
-            debug_print(f"Error sending face recognition data: {e}")
-            debug_print("Status: error")
-
-    def listen_for_query(self):
-        debug_print("Status: Processing")
-        speak("I'm listening. Please ask your question.")
-        
-        with sr.Microphone() as source:
-            debug_print("Adjusting for ambient noise")
-            self.recognizer.adjust_for_ambient_noise(source)
-            debug_print("Listening for query")
-            
-            try:
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
-                debug_print("Processing speech to text")
-                query = self.recognizer.recognize_google(audio)
-                debug_print(f"Recognized: {query}")
-                
-                message = {
-                    "type": "query",
-                    "content": query
-                }
-                
-                self.ws.send(json.dumps(message))
-                
-            except sr.WaitTimeoutError:
-                debug_print("Status: ready")
-                speak("Sorry, I didn't hear anything. Please try again.")
-            except sr.UnknownValueError:
-                debug_print("Status: ready")
-                speak("Sorry, I didn't understand that. Please try again.")
-            except Exception as e:
-                debug_print(f"Error processing speech: {e}")
-                debug_print("Status: error")
-                speak("An error occurred. Please try again.")
-
-    def run(self):
-        self.running = True
-        debug_print("Status: Processing")
-        
-        # Connect to WebSocket
-        self.connect_websocket()
+    def setup(self):
+        """Set up the camera and connections"""
+        print("Setting up client...")
         
         # Initialize camera
-        if not self.init_camera():
+        try:
+            self.camera = cv2.VideoCapture(0)
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+            self.camera.set(cv2.CAP_PROP_FPS, FPS)
+            print("Camera initialized successfully")
+        except Exception as e:
+            print(f"Error initializing camera: {e}")
+            return False
+            
+        # Start response listener thread
+        self.response_thread = threading.Thread(target=self.listen_for_responses)
+        self.response_thread.daemon = True
+        self.response_thread.start()
+        
+        return True
+        
+    def compress_frame(self, frame):
+        """Compress the frame to JPEG to reduce size"""
+        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        return buffer.tobytes()
+        
+    def send_video_frame(self, frame):
+        """Send a video frame to the server"""
+        try:
+            # Compress the frame
+            compressed_frame = self.compress_frame(frame)
+            
+            # Create a socket and connect to server
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((SERVER_IP, SERVER_PORT_VIDEO))
+                
+                # Send frame size first, then the frame
+                size = len(compressed_frame)
+                sock.sendall(struct.pack('>I', size))
+                sock.sendall(compressed_frame)
+                
+        except ConnectionRefusedError:
+            print("Could not connect to server. Make sure server is running.")
+        except Exception as e:
+            print(f"Error sending video frame: {e}")
+    
+    def record_audio(self):
+        """Record audio from microphone and send to server"""
+        self.is_recording = True
+        
+        # Open audio stream
+        stream = self.audio.open(
+            format=AUDIO_FORMAT,
+            channels=AUDIO_CHANNELS,
+            rate=AUDIO_RATE,
+            input=True,
+            frames_per_buffer=AUDIO_CHUNK
+        )
+        
+        print("Recording...")
+        
+        frames = []
+        for i in range(0, int(AUDIO_RATE / AUDIO_CHUNK * RECORDING_SECONDS)):
+            if not self.is_recording:
+                break
+            data = stream.read(AUDIO_CHUNK, exception_on_overflow=False)
+            frames.append(data)
+            
+        print("Recording complete")
+        
+        # Stop and close the stream
+        stream.stop_stream()
+        stream.close()
+        
+        # Save audio to a temporary file
+        temp_file = "temp_audio.wav"
+        wf = wave.open(temp_file, 'wb')
+        wf.setnchannels(AUDIO_CHANNELS)
+        wf.setsampwidth(self.audio.get_sample_size(AUDIO_FORMAT))
+        wf.setframerate(AUDIO_RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        
+        # Send audio file to server
+        self.send_audio_file(temp_file)
+        
+        # Clean up
+        os.remove(temp_file)
+        self.is_recording = False
+    
+    def send_audio_file(self, file_path):
+        """Send audio file to server"""
+        try:
+            with open(file_path, 'rb') as f:
+                audio_data = f.read()
+                
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((SERVER_IP, SERVER_PORT_AUDIO))
+                
+                # Send audio size first, then the audio data
+                size = len(audio_data)
+                sock.sendall(struct.pack('>I', size))
+                sock.sendall(audio_data)
+                
+            print("Audio sent to server")
+            
+        except Exception as e:
+            print(f"Error sending audio: {e}")
+    
+    def send_command(self, command):
+        """Send a command to the server"""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((SERVER_IP, SERVER_PORT_COMMANDS))
+                sock.sendall(command.encode('utf-8'))
+        except Exception as e:
+            print(f"Error sending command: {e}")
+    
+    def listen_for_responses(self):
+        """Listen for responses from the server"""
+        while not self.should_exit:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)  # 1 second timeout
+                    sock.bind(('0.0.0.0', SERVER_PORT_RESPONSE))
+                    sock.listen(1)
+                    
+                    while not self.should_exit:
+                        try:
+                            conn, addr = sock.accept()
+                            with conn:
+                                # Get message size
+                                size_data = conn.recv(4)
+                                if not size_data:
+                                    continue
+                                    
+                                size = struct.unpack('>I', size_data)[0]
+                                data = b''
+                                
+                                # Receive data
+                                while len(data) < size:
+                                    packet = conn.recv(size - len(data))
+                                    if not packet:
+                                        break
+                                    data += packet
+                                
+                                if len(data) == size:
+                                    # Process response
+                                    response = json.loads(data.decode('utf-8'))
+                                    if response['type'] == 'text':
+                                        self.speak_response(response['message'])
+                                    elif response['type'] == 'attendance':
+                                        print(f"Attendance recorded: {response['message']}")
+                                    
+                        except socket.timeout:
+                            continue
+                            
+            except Exception as e:
+                print(f"Error in response listener: {e}")
+                time.sleep(5)  # Wait before trying to reconnect
+    
+    def speak_response(self, text):
+        """Use text-to-speech to speak the response"""
+        if self.speaking:
             return
+            
+        self.speaking = True
+        try:
+            # Using espeak for simplicity
+            subprocess.run(['espeak', text])
+        except Exception as e:
+            print(f"Error speaking response: {e}")
+        finally:
+            self.speaking = False
+    
+    def run(self):
+        """Main client loop"""
+        if not self.setup():
+            print("Failed to set up client")
+            return
+            
+        print("Client running. Press 'q' to quit, 'r' to record audio.")
         
-        time.sleep(2)  # Wait for WebSocket connection
-        
-        speak("System initialized. Press the button or say 'Hello Assistant' to begin.")
+        last_frame_time = time.time()
+        frame_interval = 1.0 / FPS
         
         try:
-            
-            
-            # Setup wake word detection
-            wake_word_recognizer = sr.Recognizer()
-            
-            while self.running:
-                # Check for face recognition (periodically)
-                self.recognize_face()
+            while not self.should_exit:
+                # Capture frame
+                ret, frame = self.camera.read()
+                if not ret:
+                    print("Failed to capture frame")
+                    time.sleep(0.1)
+                    continue
                 
-                # Listen for wake word in the background
-                with sr.Microphone() as source:
-                    wake_word_recognizer.adjust_for_ambient_noise(source)
-                    try:
-                        audio = wake_word_recognizer.listen(source, timeout=1, phrase_time_limit=3)
-                        wake_text = wake_word_recognizer.recognize_google(audio)
-                        if "hello assistant" in wake_text.lower():
-                            debug_print("Wake word detected - entering query mode")
-                            self.listen_for_query()
-                    except:
-                        pass  # Ignore errors in wake word detection
+                # Send frame at desired FPS
+                current_time = time.time()
+                if current_time - last_frame_time >= frame_interval:
+                    self.send_video_frame(frame)
+                    last_frame_time = current_time
                 
-                time.sleep(0.1)
+                # Check for key presses
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    self.should_exit = True
+                elif key == ord('r') and not self.is_recording:
+                    threading.Thread(target=self.record_audio).start()
                 
-        except KeyboardInterrupt:
-            debug_print("Keyboard interrupt detected")
+                # Small delay to prevent CPU hogging
+                time.sleep(0.01)
+                
         finally:
-            self.cleanup()
-
-    def cleanup(self):
-        debug_print("Cleaning up resources")
-        self.running = False
-        
-        if self.camera is not None:
-            self.camera.release()
-        
-        if self.ws is not None:
-            self.ws.close()
-        
-
-        
-        debug_print("Cleanup complete")
+            if self.camera:
+                self.camera.release()
+            cv2.destroyAllWindows()
+            self.audio.terminate()
+            print("Client shutdown complete")
 
 if __name__ == "__main__":
-    client = AcademicAssistantClient()
-    try:
-        client.run()
-    except Exception as e:
-        debug_print(f"Error: {e}")
-        speak("A critical error occurred. System shutting down.")
-       
+    client = AttendanceClient()
+    client.run()
