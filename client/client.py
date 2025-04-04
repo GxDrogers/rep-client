@@ -1,261 +1,290 @@
-import cv2
 import socket
-import threading
-import pyaudio
-import wave
-import struct
 import time
+import cv2
+import pickle
+import numpy as np
+import pyaudio
+import threading
 import os
 import subprocess
-import json
-import numpy as np
-from PIL import Image
-import io
-
-# Configuration
-SERVER_IP = '192.168.83.133'  # Change to your server's IP address
-SERVER_PORT_VIDEO = 8000
-SERVER_PORT_AUDIO = 8001
-SERVER_PORT_COMMANDS = 8002
-SERVER_PORT_RESPONSE = 8003
-
-CAMERA_WIDTH = 640
-CAMERA_HEIGHT = 480
-FPS = 10
-AUDIO_CHUNK = 1024
-AUDIO_FORMAT = pyaudio.paInt16
-AUDIO_CHANNELS = 1
-AUDIO_RATE = 16000
-RECORDING_SECONDS = 5  # Duration to record when activated
+from gtts import gTTS
+import pygame
+from io import BytesIO
 
 class AttendanceClient:
-    def __init__(self):
+    def __init__(self, server_host='192.168.1.100', server_port=9999):
+        self.server_host = server_host
+        self.server_port = server_port
+        self.socket = None
         self.camera = None
-        self.audio = pyaudio.PyAudio()
-        self.is_recording = False
-        self.should_exit = False
-        self.response_thread = None
-        self.speaking = False
+        self.audio = None
+        self.audio_stream = None
+        self.connected = False
+        self.stop_flag = False
         
-    def setup(self):
-        """Set up the camera and connections"""
-        print("Setting up client...")
+        # Initialize pygame for audio playback
+        pygame.init()
+        pygame.mixer.init()
         
-        # Initialize camera
+        # Audio recording parameters
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        self.rate = 16000
+        self.chunk = 1024
+        self.record_seconds = 5
+    
+    def connect_to_server(self):
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.server_host, self.server_port))
+            self.connected = True
+            print(f"Connected to server at {self.server_host}:{self.server_port}")
+            return True
+        except Exception as e:
+            print(f"Failed to connect to server: {e}")
+            self.connected = False
+            return False
+    
+    def initialize_camera(self):
         try:
             self.camera = cv2.VideoCapture(0)
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
-            self.camera.set(cv2.CAP_PROP_FPS, FPS)
+            if not self.camera.isOpened():
+                print("Error: Could not open camera")
+                return False
+            
+            # Set camera resolution to reduce bandwidth
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             print("Camera initialized successfully")
+            return True
         except Exception as e:
             print(f"Error initializing camera: {e}")
             return False
-            
-        # Start response listener thread
-        self.response_thread = threading.Thread(target=self.listen_for_responses)
-        self.response_thread.daemon = True
-        self.response_thread.start()
-        
-        return True
-        
-    def compress_frame(self, frame):
-        """Compress the frame to JPEG to reduce size"""
-        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        return buffer.tobytes()
-        
-    def send_video_frame(self, frame):
-        """Send a video frame to the server"""
+    
+    def initialize_audio(self):
         try:
-            # Compress the frame
-            compressed_frame = self.compress_frame(frame)
-            
-            # Create a socket and connect to server
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((SERVER_IP, SERVER_PORT_VIDEO))
-                
-                # Send frame size first, then the frame
-                size = len(compressed_frame)
-                sock.sendall(struct.pack('>I', size))
-                sock.sendall(compressed_frame)
-                
-        except ConnectionRefusedError:
-            print("Could not connect to server. Make sure server is running.")
+            self.audio = pyaudio.PyAudio()
+            print("Audio system initialized")
+            return True
         except Exception as e:
-            print(f"Error sending video frame: {e}")
+            print(f"Error initializing audio: {e}")
+            return False
     
-    def record_audio(self):
-        """Record audio from microphone and send to server"""
-        self.is_recording = True
-        
-        # Open audio stream
-        stream = self.audio.open(
-            format=AUDIO_FORMAT,
-            channels=AUDIO_CHANNELS,
-            rate=AUDIO_RATE,
-            input=True,
-            frames_per_buffer=AUDIO_CHUNK
-        )
-        
-        print("Recording...")
-        
-        frames = []
-        for i in range(0, int(AUDIO_RATE / AUDIO_CHUNK * RECORDING_SECONDS)):
-            if not self.is_recording:
-                break
-            data = stream.read(AUDIO_CHUNK, exception_on_overflow=False)
-            frames.append(data)
-            
-        print("Recording complete")
-        
-        # Stop and close the stream
-        stream.stop_stream()
-        stream.close()
-        
-        # Save audio to a temporary file
-        temp_file = "temp_audio.wav"
-        wf = wave.open(temp_file, 'wb')
-        wf.setnchannels(AUDIO_CHANNELS)
-        wf.setsampwidth(self.audio.get_sample_size(AUDIO_FORMAT))
-        wf.setframerate(AUDIO_RATE)
-        wf.writeframes(b''.join(frames))
-        wf.close()
-        
-        # Send audio file to server
-        self.send_audio_file(temp_file)
-        
-        # Clean up
-        os.remove(temp_file)
-        self.is_recording = False
-    
-    def send_audio_file(self, file_path):
-        """Send audio file to server"""
-        try:
-            with open(file_path, 'rb') as f:
-                audio_data = f.read()
-                
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((SERVER_IP, SERVER_PORT_AUDIO))
-                
-                # Send audio size first, then the audio data
-                size = len(audio_data)
-                sock.sendall(struct.pack('>I', size))
-                sock.sendall(audio_data)
-                
-            print("Audio sent to server")
-            
-        except Exception as e:
-            print(f"Error sending audio: {e}")
-    
-    def send_command(self, command):
-        """Send a command to the server"""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((SERVER_IP, SERVER_PORT_COMMANDS))
-                sock.sendall(command.encode('utf-8'))
-        except Exception as e:
-            print(f"Error sending command: {e}")
-    
-    def listen_for_responses(self):
-        """Listen for responses from the server"""
-        while not self.should_exit:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(1)  # 1 second timeout
-                    sock.bind(('0.0.0.0', SERVER_PORT_RESPONSE))
-                    sock.listen(1)
-                    
-                    while not self.should_exit:
-                        try:
-                            conn, addr = sock.accept()
-                            with conn:
-                                # Get message size
-                                size_data = conn.recv(4)
-                                if not size_data:
-                                    continue
-                                    
-                                size = struct.unpack('>I', size_data)[0]
-                                data = b''
-                                
-                                # Receive data
-                                while len(data) < size:
-                                    packet = conn.recv(size - len(data))
-                                    if not packet:
-                                        break
-                                    data += packet
-                                
-                                if len(data) == size:
-                                    # Process response
-                                    response = json.loads(data.decode('utf-8'))
-                                    if response['type'] == 'text':
-                                        self.speak_response(response['message'])
-                                    elif response['type'] == 'attendance':
-                                        print(f"Attendance recorded: {response['message']}")
-                                    
-                        except socket.timeout:
-                            continue
-                            
-            except Exception as e:
-                print(f"Error in response listener: {e}")
-                time.sleep(5)  # Wait before trying to reconnect
-    
-    def speak_response(self, text):
-        """Use text-to-speech to speak the response"""
-        if self.speaking:
+    def start_camera_stream(self):
+        if not self.connected or not self.camera:
+            print("Cannot start camera stream: not connected or camera not initialized")
             return
-            
-        self.speaking = True
-        try:
-            # Using espeak for simplicity
-            subprocess.run(['espeak', text])
-        except Exception as e:
-            print(f"Error speaking response: {e}")
-        finally:
-            self.speaking = False
+        
+        threading.Thread(target=self._camera_stream_thread, daemon=True).start()
     
-    def run(self):
-        """Main client loop"""
-        if not self.setup():
-            print("Failed to set up client")
-            return
-            
-        print("Client running. Press 'q' to quit, 'r' to record audio.")
-        
-        last_frame_time = time.time()
-        frame_interval = 1.0 / FPS
-        
+    def _camera_stream_thread(self):
+        print("Starting camera stream...")
         try:
-            while not self.should_exit:
-                # Capture frame
+            while not self.stop_flag and self.connected:
                 ret, frame = self.camera.read()
                 if not ret:
                     print("Failed to capture frame")
-                    time.sleep(0.1)
+                    time.sleep(1)
                     continue
                 
-                # Send frame at desired FPS
-                current_time = time.time()
-                if current_time - last_frame_time >= frame_interval:
-                    self.send_video_frame(frame)
-                    last_frame_time = current_time
+                # Resize frame to reduce bandwidth
+                frame = cv2.resize(frame, (320, 240))
                 
-                # Check for key presses
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    self.should_exit = True
-                elif key == ord('r') and not self.is_recording:
-                    threading.Thread(target=self.record_audio).start()
+                # Encode frame to JPEG
+                _, buffer = cv2.imencode('.jpg', frame)
+                jpg_as_bytes = buffer.tobytes()
                 
-                # Small delay to prevent CPU hogging
-                time.sleep(0.01)
+                try:
+                    # Send data type indicator ('I' for image)
+                    self.socket.sendall(b"I")
+                    
+                    # Send image size
+                    size = len(jpg_as_bytes)
+                    size_bytes = size.to_bytes(8, byteorder='big')
+                    self.socket.sendall(size_bytes)
+                    
+                    # Send image data
+                    self.socket.sendall(jpg_as_bytes)
+                    
+                    # Check for recognition response (non-blocking)
+                    self.socket.setblocking(0)
+                    try:
+                        response = self.socket.recv(1024).decode()
+                        if response.startswith("R"):
+                            names = response[1:].split(",")
+                            self.speak_welcome(names)
+                    except:
+                        pass
+                    self.socket.setblocking(1)
+                    
+                except Exception as e:
+                    print(f"Error sending image: {e}")
+                    break
                 
+                time.sleep(0.1)  # Limit to ~10 FPS
+        
+        except Exception as e:
+            print(f"Camera stream error: {e}")
         finally:
-            if self.camera:
-                self.camera.release()
-            cv2.destroyAllWindows()
+            print("Camera stream stopped")
+    
+    def speak_welcome(self, names):
+        name_str = ", ".join(names)
+        message = f"Welcome {name_str}. Your attendance has been marked."
+        self.speak(message)
+    
+    def start_listening(self):
+        if not self.connected or not self.audio:
+            print("Cannot start listening: not connected or audio not initialized")
+            return
+        
+        print("Press ENTER to start recording a voice query...")
+        
+        def input_thread():
+            while not self.stop_flag:
+                input()
+                if self.stop_flag:
+                    break
+                print("Recording... Speak now for 5 seconds.")
+                self.record_and_send_audio()
+                print("Press ENTER to record another query...")
+        
+        threading.Thread(target=input_thread, daemon=True).start()
+    
+    def record_and_send_audio(self):
+        try:
+            self.audio_stream = self.audio.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                frames_per_buffer=self.chunk
+            )
+            
+            print("Recording...")
+            frames = []
+            
+            for i in range(0, int(self.rate / self.chunk * self.record_seconds)):
+                data = self.audio_stream.read(self.chunk, exception_on_overflow=False)
+                frames.append(data)
+            
+            print("Finished recording")
+            self.audio_stream.stop_stream()
+            self.audio_stream.close()
+            
+            # Combine all audio frames
+            audio_data = b''.join(frames)
+            
+            try:
+                # Send data type indicator ('A' for audio)
+                self.socket.sendall(b"A")
+                
+                # Send audio size
+                size = len(audio_data)
+                size_bytes = size.to_bytes(8, byteorder='big')
+                self.socket.sendall(size_bytes)
+                
+                # Send audio data
+                self.socket.sendall(audio_data)
+                
+                # Wait for response
+                response = self.socket.recv(4096).decode()
+                if response.startswith("T"):
+                    text_response = response[1:]
+                    print(f"Server response: {text_response}")
+                    self.speak(text_response)
+            
+            except Exception as e:
+                print(f"Error sending audio or receiving response: {e}")
+        
+        except Exception as e:
+            print(f"Error recording audio: {e}")
+    
+    def speak(self, text):
+        try:
+            # Create a text-to-speech object
+            tts = gTTS(text=text, lang='en')
+            
+            # Save to a BytesIO object
+            fp = BytesIO()
+            tts.write_to_fp(fp)
+            fp.seek(0)
+            
+            # Play the audio
+            pygame.mixer.music.load(fp)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+        
+        except Exception as e:
+            print(f"Error speaking: {e}")
+    
+    def shutdown(self):
+        self.stop_flag = True
+        
+        if self.socket:
+            try:
+                self.socket.close()
+            except:
+                pass
+        
+        if self.camera:
+            self.camera.release()
+        
+        if self.audio_stream:
+            try:
+                self.audio_stream.stop_stream()
+                self.audio_stream.close()
+            except:
+                pass
+        
+        if self.audio:
             self.audio.terminate()
-            print("Client shutdown complete")
+        
+        pygame.mixer.quit()
+        pygame.quit()
+        
+        print("Client shutdown complete")
+
+def main():
+    # Change this to your server's IP address
+    SERVER_HOST = "192.168.1.100"  # Replace with your laptop/PC IP address
+    SERVER_PORT = 9999
+
+    client = AttendanceClient(server_host=SERVER_HOST, server_port=SERVER_PORT)
+    
+    try:
+        # Initialize hardware
+        if not client.initialize_camera():
+            print("Failed to initialize camera. Exiting...")
+            return
+        
+        if not client.initialize_audio():
+            print("Failed to initialize audio. Exiting...")
+            return
+        
+        # Connect to server
+        if not client.connect_to_server():
+            print("Failed to connect to server. Exiting...")
+            return
+        
+        # Start camera stream
+        client.start_camera_stream()
+        
+        # Start listening for voice queries
+        client.start_listening()
+        
+        # Keep running until keyboard interrupt
+        while True:
+            time.sleep(1)
+    
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    finally:
+        client.shutdown()
 
 if __name__ == "__main__":
-    client = AttendanceClient()
-    client.run()
+    main()
+
+
+    
