@@ -17,18 +17,19 @@ from PIL import Image, ImageTk
 import warnings
 warnings.filterwarnings("ignore")
 
-# Add after pygame import
-os.environ['SDL_VIDEODRIVER'] = 'x11'
+# Initialize SDL for Raspberry Pi
+os.environ['SDL_VIDEODRIVER'] = 'fbcon'
+os.environ['DISPLAY'] = ':0'
 
 # Configuration
-SERVER_IP = '192.168.1.100'  # Change this to your server IP
+SERVER_IP = '127.0.0.1'  # Change this to your actual server IP
 SERVER_PORT = 9999
-CAMERA_WIDTH = 640
-CAMERA_HEIGHT = 480
+CAMERA_WIDTH = 320  # Reduced for Raspberry Pi
+CAMERA_HEIGHT = 240  # Reduced for Raspberry Pi
 AUDIO_FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 16000
-CHUNK = 4096
+RATE = 44100
+CHUNK = 1024
 RECORD_SECONDS = 5
 
 # Global variables
@@ -40,7 +41,24 @@ class AttendanceClient:
     def __init__(self, root):
         self.root = root
         self.root.title("Attendance System")
-        self.root.geometry("800x480")  # Common Raspberry Pi display resolution
+        
+        # Get screen dimensions
+        try:
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+        except:
+            screen_width = 800
+            screen_height = 480
+        
+        self.root.geometry(f"{screen_width}x{screen_height}")
+        
+        # Force window to show on top
+        try:
+            self.root.attributes('-topmost', True)
+            self.root.update()
+            self.root.attributes('-topmost', False)
+        except:
+            pass
         
         self.style = ttk.Style(theme="darkly")
         
@@ -109,19 +127,21 @@ class AttendanceClient:
     
     def init_camera(self):
         try:
-            # Try different video capture methods
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                # Try legacy video capture
-                self.cap = cv2.VideoCapture(-1)
+            # Try different camera indices for Raspberry Pi
+            camera_indices = [0, -1, 2, 1]
+            for idx in camera_indices:
+                self.cap = cv2.VideoCapture(idx)
+                if self.cap.isOpened():
+                    print(f"Camera opened successfully on index {idx}")
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    break
             
-            if self.cap.isOpened():
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            else:
+            if not self.cap.isOpened():
                 self.status_label.config(text="Error: Could not open camera")
                 print("Error: Could not open camera")
+                
         except Exception as e:
             self.status_label.config(text=f"Camera error: {str(e)}")
             print(f"Camera error: {str(e)}")
