@@ -1,5 +1,7 @@
+(env) pi@raspberrypi:~/Desktop/client $ python3 client.py 
 pygame 2.6.1 (SDL 2.28.4, Python 3.11.2)
 Hello from the pygame community. https://www.pygame.org/contribute.html
+Camera opened successfully on index 0
 Connection error: [Errno 111] Connection refused
 ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.front.0:CARD=0'
 ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
@@ -89,6 +91,5 @@ JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unloc
 X Error of failed request:  BadValue (integer parameter out of range for operation)
   Major opcode of failed request:  53 (X_CreatePixmap)
   Value in failed request:  0x0
-  Serial number of failed request:  453
-  Current serial number in output stream:  456
-
+  Serial number of failed request:  477
+  Current serial number in output stream:  480
