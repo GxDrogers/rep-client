@@ -17,9 +17,9 @@ from PIL import Image, ImageTk
 import warnings
 warnings.filterwarnings("ignore")
 
-# Initialize SDL for Raspberry Pi
-os.environ['SDL_VIDEODRIVER'] = 'fbcon'
-os.environ['DISPLAY'] = ':0'
+# Environment settings
+os.environ['DISPLAY'] = ':0.0'
+os.environ['PYTHONUNBUFFERED'] = '1'
 
 # Configuration
 SERVER_IP = '127.0.0.1'  # Change this to your actual server IP
@@ -371,19 +371,13 @@ def main():
     global running
     
     try:
-        # Enable better error reporting
-        import sys
-        import traceback
+        # Force the window to run in X11
+        import tkinter as tk
+        root = ttk.Window(className='AttendanceSystem')
         
-        def handle_exception(exc_type, exc_value, exc_traceback):
-            print("An error occurred:")
-            traceback.print_exception(exc_type, exc_value, exc_traceback)
-        
-        sys.excepthook = handle_exception
-        
-        # Create Tkinter root with error handling
-        root = ttk.Window()
-        root.protocol("WM_DELETE_WINDOW", lambda: cleanup(root))
+        # Set window attributes for Raspberry Pi
+        root.attributes('-fullscreen', True)
+        root.update_idletasks()
         
         # Create client app
         app = AttendanceClient(root)
@@ -397,20 +391,5 @@ def main():
     finally:
         running = False
 
-def cleanup(root):
-    global running
-    running = False
-    root.destroy()
-
-
-
-# # Install required system packages
-# sudo apt-get update
-# sudo apt-get install -y python3-pygame python3-tk python3-pil python3-pil.imagetk portaudio19-dev python3-pyaudio
-
-# # Configure audio
-# sudo modprobe snd_bcm2835
-# sudo usermod -a -G audio $USER
-
-# # Fix video permissions
-# sudo usermod -a -G video $USER
+if __name__ == "__main__":
+    main()
