@@ -14,6 +14,11 @@ import tkinter as tk
 from tkinter import ttk
 import ttkbootstrap as ttk
 from PIL import Image, ImageTk
+import warnings
+warnings.filterwarnings("ignore")
+
+# Add after pygame import
+os.environ['SDL_VIDEODRIVER'] = 'x11'
 
 # Configuration
 SERVER_IP = '192.168.1.100'  # Change this to your server IP
@@ -104,11 +109,17 @@ class AttendanceClient:
     
     def init_camera(self):
         try:
+            # Try different video capture methods
             self.cap = cv2.VideoCapture(0)
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
-            
             if not self.cap.isOpened():
+                # Try legacy video capture
+                self.cap = cv2.VideoCapture(-1)
+            
+            if self.cap.isOpened():
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            else:
                 self.status_label.config(text="Error: Could not open camera")
                 print("Error: Could not open camera")
         except Exception as e:
@@ -117,7 +128,18 @@ class AttendanceClient:
     
     def init_audio(self):
         try:
+            # Set default audio device
             self.audio = pyaudio.PyAudio()
+            default_input = self.audio.get_default_input_device_info()
+            default_output = self.audio.get_default_output_device_info()
+            
+            # Update AUDIO_FORMAT configuration
+            global AUDIO_FORMAT, CHANNELS, RATE, CHUNK
+            AUDIO_FORMAT = pyaudio.paInt16
+            CHANNELS = 1
+            RATE = 44100  # More common sample rate
+            CHUNK = 1024  # Smaller chunk size
+            
             self.recording = False
         except Exception as e:
             self.status_label.config(text=f"Audio error: {str(e)}")
@@ -329,18 +351,46 @@ def main():
     global running
     
     try:
-        # Create Tkinter root
+        # Enable better error reporting
+        import sys
+        import traceback
+        
+        def handle_exception(exc_type, exc_value, exc_traceback):
+            print("An error occurred:")
+            traceback.print_exception(exc_type, exc_value, exc_traceback)
+        
+        sys.excepthook = handle_exception
+        
+        # Create Tkinter root with error handling
         root = ttk.Window()
+        root.protocol("WM_DELETE_WINDOW", lambda: cleanup(root))
         
         # Create client app
         app = AttendanceClient(root)
         
         # Start main loop
         root.mainloop()
+        
     except Exception as e:
-        print(f"Error in main: {e}")
+        print(f"Critical error in main: {e}")
+        traceback.print_exc()
     finally:
         running = False
 
-if __name__ == "__main__":
-    main()
+def cleanup(root):
+    global running
+    running = False
+    root.destroy()
+
+
+
+# # Install required system packages
+# sudo apt-get update
+# sudo apt-get install -y python3-pygame python3-tk python3-pil python3-pil.imagetk portaudio19-dev python3-pyaudio
+
+# # Configure audio
+# sudo modprobe snd_bcm2835
+# sudo usermod -a -G audio $USER
+
+# # Fix video permissions
+# sudo usermod -a -G video $USER
