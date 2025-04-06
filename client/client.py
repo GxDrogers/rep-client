@@ -18,11 +18,12 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Environment settings
-os.environ['DISPLAY'] = ':0.0'
+os.environ['DISPLAY'] = ':0'
+os.environ['PULSE_SERVER'] = 'unix:/run/user/1000/pulse/native'
 os.environ['PYTHONUNBUFFERED'] = '1'
 
 # Configuration
-SERVER_IP = '127.0.0.1'  # Change this to your actual server IP
+SERVER_IP = '192.168.83.133'  # Replace with your server's IP
 SERVER_PORT = 9999
 CAMERA_WIDTH = 320  # Reduced for Raspberry Pi
 CAMERA_HEIGHT = 240  # Reduced for Raspberry Pi
@@ -148,38 +149,51 @@ class AttendanceClient:
     
     def init_audio(self):
         try:
-            # Set default audio device
             self.audio = pyaudio.PyAudio()
-            default_input = self.audio.get_default_input_device_info()
-            default_output = self.audio.get_default_output_device_info()
             
-            # Update AUDIO_FORMAT configuration
+            # List available devices
+            print("\nAvailable Audio Devices:")
+            for i in range(self.audio.get_device_count()):
+                dev_info = self.audio.get_device_info_by_index(i)
+                print(f"Device {i}: {dev_info['name']}")
+            
+            # Use default device
             global AUDIO_FORMAT, CHANNELS, RATE, CHUNK
             AUDIO_FORMAT = pyaudio.paInt16
             CHANNELS = 1
-            RATE = 44100  # More common sample rate
-            CHUNK = 1024  # Smaller chunk size
+            RATE = 44100
+            CHUNK = 1024
             
             self.recording = False
+            print("Audio initialized successfully")
+            
         except Exception as e:
-            self.status_label.config(text=f"Audio error: {str(e)}")
-            print(f"Audio error: {str(e)}")
+            print(f"Audio initialization error: {str(e)}")
+            self.status_label.config(text="Audio init failed")
     
     def connect_to_server(self):
-        try:
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect((SERVER_IP, SERVER_PORT))
-            self.status_label.config(text="Connected to server")
-            print("Connected to server")
-            
-            # Start thread for sending frames
-            self.send_thread = threading.Thread(target=self.send_frames)
-            self.send_thread.daemon = True
-            self.send_thread.start()
-            
-        except Exception as e:
-            self.status_label.config(text=f"Connection error: {str(e)}")
-            print(f"Connection error: {str(e)}")
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket.connect((SERVER_IP, SERVER_PORT))
+                self.status_label.config(text="Connected to server")
+                print("Connected to server")
+                
+                self.send_thread = threading.Thread(target=self.send_frames)
+                self.send_thread.daemon = True
+                self.send_thread.start()
+                return
+                
+            except Exception as e:
+                retry_count += 1
+                print(f"Connection attempt {retry_count} failed: {str(e)}")
+                time.sleep(2)
+        
+        self.status_label.config(text="Connection failed")
+        print("Failed to connect after multiple attempts")
     
     def send_frames(self):
         last_sent_time = 0
@@ -393,3 +407,21 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+    '''
+sudo nano /etc/asound.conf
+
+
+pcm.!default {
+    type hw
+    card 0
+}
+
+ctl.!default {
+    type hw
+    card 0
+}
+
+    '''
