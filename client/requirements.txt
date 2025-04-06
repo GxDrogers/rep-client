@@ -1,95 +1,32 @@
-(env) pi@raspberrypi:~/Desktop/client $ python3 client.py 
-pygame 2.6.1 (SDL 2.28.4, Python 3.11.2)
-Hello from the pygame community. https://www.pygame.org/contribute.html
-Camera opened successfully on index 0
-Connection error: [Errno 111] Connection refused
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.front.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM front
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.rear
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.center_lfe
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.side
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround51.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround21
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround51.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround21
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround40.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround40
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround51.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround41
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround51.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround50
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround51.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround51
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.surround71.0:CARD=0'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM surround71
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.iec958.0:CARD=0,AES0=4,AES1=130,AES2=0,AES3=2'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM iec958
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.iec958.0:CARD=0,AES0=4,AES1=130,AES2=0,AES3=2'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM spdif
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.iec958.0:CARD=0,AES0=4,AES1=130,AES2=0,AES3=2'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM spdif
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.hdmi.0:CARD=0,AES0=4,AES1=130,AES2=0,AES3=2'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM hdmi
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.hdmi.0:CARD=0,AES0=4,AES1=130,AES2=0,AES3=2'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM hdmi
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.modem
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.modem
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.phoneline
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.phoneline
-Cannot connect to server socket err = No such file or directory
-Cannot connect to server request channel
-jack server is not running or cannot be started
-JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
-JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
-Cannot connect to server socket err = No such file or directory
-Cannot connect to server request channel
-jack server is not running or cannot be started
-JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
-JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
-ALSA lib pcm_oss.c:397:(_snd_pcm_oss_open) Cannot open device /dev/dsp
-ALSA lib pcm_oss.c:397:(_snd_pcm_oss_open) Cannot open device /dev/dsp
-ALSA lib pcm_a52.c:1001:(_snd_pcm_a52_open) a52 is only for playback
-ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.iec958.0:CARD=0,AES0=6,AES1=130,AES2=0,AES3=2'
-ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
-ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM iec958:{AES0 0x6 AES1 0x82 AES2 0x0 AES3 0x2 CARD 0}
-ALSA lib confmisc.c:160:(snd_config_get_card) Invalid field card
-ALSA lib pcm_usb_stream.c:482:(_snd_pcm_usb_stream_open) Invalid card 'card'
-ALSA lib confmisc.c:160:(snd_config_get_card) Invalid field card
-ALSA lib pcm_usb_stream.c:482:(_snd_pcm_usb_stream_open) Invalid card 'card'
-Cannot connect to server socket err = No such file or directory
-Cannot connect to server request channel
-jack server is not running or cannot be started
-JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
-JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
-X Error of failed request:  BadValue (integer parameter out of range for operation)
-  Major opcode of failed request:  53 (X_CreatePixmap)
-  Value in failed request:  0x0
-  Serial number of failed request:  477
-  Current serial number in output stream:  480
+from flask import Flask, Response, request
+import picamera
+import time
+import os
+
+# Initialize Flask app
+app = Flask(__name__)
+camera = picamera.PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 24
+
+@app.route('/video_feed')
+def video_feed():
+    def generate_frames():
+        while True:
+            camera.capture('frame.jpg', use_video_port=True)
+            with open('frame.jpg', 'rb') as f:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' +
+                       f.read() + b'\r\n')
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/voice_input', methods=['POST'])
+def voice_input():
+    audio_file = request.files['audio']
+    audio_path = 'user_audio.wav'
+    with open(audio_path, 'wb') as f:
+        f.write(audio_file.read())
+    return "Audio received and saved."
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000)
