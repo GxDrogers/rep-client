@@ -1,52 +1,57 @@
-import cv2
-import numpy as np
-import socket
-import pyaudio
-
-# Raspberry Pi IP and ports (adjust if needed)
-RPI_IP = '192.168.x.x'  # Replace with the Raspberry Pi's IP address
-VIDEO_PORT = 5000
-AUDIO_PORT = 5001
-
-# Initialize sockets for receiving video and audio
-video_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-audio_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-video_socket.connect((RPI_IP, VIDEO_PORT))
-audio_socket.connect((RPI_IP, AUDIO_PORT))
-
-# Initialize PyAudio for audio playback
-p = pyaudio.PyAudio()
-audio_stream = p.open(format=pyaudio.paInt16,
-                     channels=1,
-                     rate=44100,
-                     output=True,
-                     frames_per_buffer=1024)
-
-# Function to display the video stream
-def display_video():
-    while True:
-        data, _ = video_socket.recvfrom(65536)  # Buffer size (adjust as needed)
-        np_data = np.frombuffer(data, dtype=np.uint8)
-        frame = cv2.imdecode(np_data, 1)
-        if frame is not None:
-            cv2.imshow('Raspberry Pi Video Stream', frame)
-        cv2.waitKey(1)
-
-# Function to play the audio stream
-def play_audio():
-    while True:
-        audio_data, _ = audio_socket.recvfrom(1024)  # 1024-byte chunks
-        audio_stream.write(audio_data)
-
-# Start video and audio streams in separate threads
+from picamera2 import Picamera2
+from picamera2.encoders import JpegEncoder
+from picamera2.outputs import FileOutput
+from flask import Flask, Response, render_template_string
+import io
+import time
 import threading
-video_thread = threading.Thread(target=display_video)
-audio_thread = threading.Thread(target=play_audio)
 
-video_thread.start()
-audio_thread.start()
+app = Flask(__name__)
+picam2 = None
+output = None
 
-# Keep the main thread alive
-video_thread.join()
-audio_thread.join()
+def initialize_camera():
+    global picam2, output
+    picam2 = Picamera2()
+    config = picam2.create_video_configuration(main={"size": (640, 480)})
+    picam2.configure(config)
+    
+    output = io.BytesIO()
+    picam2.start_recording(JpegEncoder(), FileOutput(output))
+    
+def get_frame():
+    global output
+    while True:
+        with output.lock:
+            yield (b'--frame\r\n'
+                  b'Content-Type: image/jpeg\r\n\r\n' + output.getvalue() + b'\r\n')
+        time.sleep(0.1)
+
+@app.route('/')
+def index():
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Raspberry Pi Camera Stream</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+            h1 { color: #333; }
+            .stream { margin: 20px auto; border: 2px solid #ddd; }
+        </style>
+    </head>
+    <body>
+        <h1>Camera Stream</h1>
+        <img src="/video_feed" class="stream" width="640" height="480" />
+    </body>
+    </html>
+    ''')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(get_frame(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+if __name__ == '__main__':
+    initialize_camera()
+    app.run(host='0.0.0.0', port=8000, threaded=True)
