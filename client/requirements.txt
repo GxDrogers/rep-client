@@ -1,32 +1,52 @@
-from flask import Flask, Response, request
-import picamera
-import time
-import os
+import cv2
+import numpy as np
+import socket
+import pyaudio
 
-# Initialize Flask app
-app = Flask(__name__)
-camera = picamera.PiCamera()
-camera.resolution = (640, 480)
-camera.framerate = 24
+# Raspberry Pi IP and ports (adjust if needed)
+RPI_IP = '192.168.x.x'  # Replace with the Raspberry Pi's IP address
+VIDEO_PORT = 5000
+AUDIO_PORT = 5001
 
-@app.route('/video_feed')
-def video_feed():
-    def generate_frames():
-        while True:
-            camera.capture('frame.jpg', use_video_port=True)
-            with open('frame.jpg', 'rb') as f:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' +
-                       f.read() + b'\r\n')
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+# Initialize sockets for receiving video and audio
+video_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+audio_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-@app.route('/voice_input', methods=['POST'])
-def voice_input():
-    audio_file = request.files['audio']
-    audio_path = 'user_audio.wav'
-    with open(audio_path, 'wb') as f:
-        f.write(audio_file.read())
-    return "Audio received and saved."
+video_socket.connect((RPI_IP, VIDEO_PORT))
+audio_socket.connect((RPI_IP, AUDIO_PORT))
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+# Initialize PyAudio for audio playback
+p = pyaudio.PyAudio()
+audio_stream = p.open(format=pyaudio.paInt16,
+                     channels=1,
+                     rate=44100,
+                     output=True,
+                     frames_per_buffer=1024)
+
+# Function to display the video stream
+def display_video():
+    while True:
+        data, _ = video_socket.recvfrom(65536)  # Buffer size (adjust as needed)
+        np_data = np.frombuffer(data, dtype=np.uint8)
+        frame = cv2.imdecode(np_data, 1)
+        if frame is not None:
+            cv2.imshow('Raspberry Pi Video Stream', frame)
+        cv2.waitKey(1)
+
+# Function to play the audio stream
+def play_audio():
+    while True:
+        audio_data, _ = audio_socket.recvfrom(1024)  # 1024-byte chunks
+        audio_stream.write(audio_data)
+
+# Start video and audio streams in separate threads
+import threading
+video_thread = threading.Thread(target=display_video)
+audio_thread = threading.Thread(target=play_audio)
+
+video_thread.start()
+audio_thread.start()
+
+# Keep the main thread alive
+video_thread.join()
+audio_thread.join()
